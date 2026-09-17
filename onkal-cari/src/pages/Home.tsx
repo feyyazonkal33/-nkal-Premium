@@ -18,31 +18,15 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
+    <div className="flex flex-col min-h-screen pb-16 bg-dark">
       <TopBar />
 
-      {/* Tabs */}
-      <div className="flex w-full border-b border-gold/30">
-        <button
-          onClick={() => handleSelect('left')}
-          className="flex-1 py-3 text-center font-bold text-gray-300 hover:text-gold hover:bg-gold/5 transition-colors border-r border-gold/30"
-        >
-          İşçilik
-        </button>
-        <button
-          onClick={() => handleSelect('right')}
-          className="flex-1 py-3 text-center font-bold text-gray-300 hover:text-gold hover:bg-gold/5 transition-colors"
-        >
-          Hesap
-        </button>
-      </div>
-
       {/* Main Content Area */}
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden mt-8">
 
         {/* Animated Logo Container */}
         <div
-          className="transition-transform duration-1000 ease-in-out z-10 w-64 h-64"
+          className="transition-transform duration-1000 ease-in-out z-10 w-64 h-64 mb-10"
           style={{
             transform: animating === 'left'
               ? 'translateX(-150vw) rotate(-360deg)'
@@ -51,7 +35,24 @@ export default function Home() {
                 : 'translateX(0) rotate(0deg)'
           }}
         >
-          <Logo className="w-full h-full cursor-pointer hover:scale-105 transition-transform duration-300" />
+          <Logo className="w-full h-full" />
+        </div>
+
+        {/* Capsule Tabs */}
+        <div className="flex bg-gray-900 border border-gold/50 rounded-full p-1 z-20 w-3/4 max-w-xs shadow-lg relative">
+          <button
+            onClick={() => handleSelect('left')}
+            className={`flex-1 py-2 text-center font-bold rounded-full transition-colors focus:outline-none z-10 ${animating === 'left' ? 'bg-gold text-dark' : 'text-gray-300 hover:text-gold'}`}
+          >
+            İşçilik
+          </button>
+          <div className="w-[1px] bg-gold/30 my-2 mx-1" />
+          <button
+            onClick={() => handleSelect('right')}
+            className={`flex-1 py-2 text-center font-bold rounded-full transition-colors focus:outline-none z-10 ${animating === 'right' ? 'bg-gold text-dark' : 'text-gray-300 hover:text-gold'}`}
+          >
+            Hesap
+          </button>
         </div>
 
         {/* Backdrop visual elements */}

@@ -28,40 +28,47 @@ export default function IscilikDetail() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-20 bg-dark">
+    <div className="flex flex-col min-h-screen pb-24 bg-dark">
       <TopBar />
 
       <div className="p-4 flex-1">
         <div className="flex items-center gap-2 mb-6 border-b border-gold/30 pb-3">
-          <button onClick={() => navigate(-1)} className="text-gold hover:text-gold-light">
-            <ChevronLeft size={24} />
+          <button onClick={() => navigate(-1)} className="text-gold hover:text-gold-light transition-colors">
+            <ChevronLeft size={28} />
           </button>
-          <h2 className="text-gold font-bold text-xl truncate">{record.name} - İşçilik</h2>
+          <div className="flex flex-col">
+            <h2 className="text-gold font-bold text-xl truncate">{record.name}</h2>
+            <span className="text-gray-400 text-xs">İşçilik Detayları</span>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">
           <div
             onClick={() => setActiveModal('m2Price')}
-            className="bg-gray-900 border border-gold/40 rounded-lg p-5 cursor-pointer hover:bg-gray-800 transition-colors shadow-md flex justify-between items-center"
+            className="bg-gray-900 border border-gold/50 rounded-xl p-5 cursor-pointer hover:bg-gray-800 transition-colors shadow-lg flex justify-between items-center"
           >
-            <span className="font-semibold text-lg text-gray-200">m² fiyatı</span>
-            <span className="text-sm text-gray-400 truncate max-w-[150px]">{record.m2Price ? '(Dolu)' : '(Boş)'}</span>
+            <span className="font-semibold text-lg text-gray-200 tracking-wide">m² Fiyatı</span>
+            <span className={`text-sm font-medium ${record.m2Price ? 'text-gold' : 'text-gray-500'} truncate max-w-[150px]`}>
+              {record.m2Price ? 'Düzenle' : 'Ekle'}
+            </span>
           </div>
 
           <div
             onClick={() => setActiveModal('measurements')}
-            className="bg-gray-900 border border-gold/40 rounded-lg p-5 cursor-pointer hover:bg-gray-800 transition-colors shadow-md flex justify-between items-center"
+            className="bg-gray-900 border border-gold/50 rounded-xl p-5 cursor-pointer hover:bg-gray-800 transition-colors shadow-lg flex justify-between items-center"
           >
-            <span className="font-semibold text-lg text-gray-200">İnşaat m² ölçüleri</span>
-            <span className="text-sm text-gray-400">Tabloyu Aç</span>
+            <span className="font-semibold text-lg text-gray-200 tracking-wide">İnşaat m² Ölçüleri</span>
+            <span className="text-sm text-gold font-medium">Tabloyu Aç</span>
           </div>
 
           <div
             onClick={() => setActiveModal('alacakVerecek')}
-            className="bg-gray-900 border border-gold/40 rounded-lg p-5 cursor-pointer hover:bg-gray-800 transition-colors shadow-md flex justify-between items-center"
+            className="bg-gray-900 border border-gold/50 rounded-xl p-5 cursor-pointer hover:bg-gray-800 transition-colors shadow-lg flex justify-between items-center"
           >
-            <span className="font-semibold text-lg text-gray-200">Alacak/Verecek</span>
-            <span className="text-sm text-gray-400 truncate max-w-[150px]">{record.notes ? '(Dolu)' : '(Boş)'}</span>
+            <span className="font-semibold text-lg text-gray-200 tracking-wide">Alacak/Verecek</span>
+            <span className={`text-sm font-medium ${record.notes ? 'text-gold' : 'text-gray-500'} truncate max-w-[150px]`}>
+              {record.notes ? 'Düzenle' : 'Ekle'}
+            </span>
           </div>
         </div>
       </div>

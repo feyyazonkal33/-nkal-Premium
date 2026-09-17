@@ -13,6 +13,9 @@ export default {
           DEFAULT: '#d4af37', // Logo rengine uygun altın/gold vurgu rengi
           dark: '#aa8c2c',
         }
+      },
+      backgroundImage: {
+        'gold-gradient': 'linear-gradient(135deg, #f5d76e 0%, #d4af37 50%, #aa8c2c 100%)',
       }
     },
   },
