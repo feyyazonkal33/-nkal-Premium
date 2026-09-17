@@ -1,9 +1,4 @@
 import { useState, useEffect } from 'react';
-import localforage from 'localforage';
-
-localforage.config({
-  name: 'OnkalPremiumCari',
-});
 
 export interface RecordItem {
   id: string;
@@ -22,6 +17,32 @@ export interface Transaction {
   amount: number;
 }
 
+const STORAGE_KEY = 'onkal_premium_cari_records';
+
+const MOCK_DATA: RecordItem[] = [
+  {
+    id: '1',
+    name: 'Tursunlar İnşaat',
+    type: 'iscilik',
+    measurements: [],
+    transactions: [],
+  },
+  {
+    id: '2',
+    name: 'Nkal Şantiye',
+    type: 'hesap',
+    measurements: [],
+    transactions: [],
+  },
+  {
+    id: '3',
+    name: 'Önkal Plaza',
+    type: 'iscilik',
+    measurements: [],
+    transactions: [],
+  }
+];
+
 export function useStore() {
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,22 +51,32 @@ export function useStore() {
     loadRecords();
   }, []);
 
-  const loadRecords = async () => {
+  const loadRecords = () => {
     try {
-      const stored = await localforage.getItem<RecordItem[]>('records');
+      const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setRecords(stored);
+        const parsed = JSON.parse(stored);
+        if (parsed.length > 0) {
+          setRecords(parsed);
+        } else {
+          setRecords(MOCK_DATA);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_DATA));
+        }
+      } else {
+        setRecords(MOCK_DATA);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_DATA));
       }
     } catch (e) {
       console.error('Error loading records', e);
+      setRecords(MOCK_DATA);
     } finally {
       setLoading(false);
     }
   };
 
-  const saveRecords = async (newRecords: RecordItem[]) => {
+  const saveRecords = (newRecords: RecordItem[]) => {
     try {
-      await localforage.setItem('records', newRecords);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newRecords));
       setRecords(newRecords);
     } catch (e) {
       console.error('Error saving records', e);

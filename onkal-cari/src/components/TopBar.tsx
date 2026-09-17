@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Cloud, Sun } from 'lucide-react';
+import { Cloud, Sun, ChevronLeft, Building2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function TopBar() {
   const [time, setTime] = useState(new Date());
   const [weather, setWeather] = useState<{ temp: number, isDay: boolean } | null>(null);
+  const [logoError, setLogoError] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -43,11 +47,25 @@ export default function TopBar() {
   };
 
   return (
-    <div className="w-full bg-dark px-4 py-3 border-b border-gold/30">
+    <div className="w-full bg-dark px-4 py-3 border-b border-gold/30 shrink-0 sticky top-0 z-50">
       <div className="flex items-center gap-3">
+        {location.pathname !== '/' && (
+          <button onClick={() => navigate(-1)} className="text-gold hover:text-gold-light transition-colors p-1">
+            <ChevronLeft size={24} />
+          </button>
+        )}
         {/* Small Top Logo */}
-        <div className="w-8 h-8 rounded-full border border-gold overflow-hidden shrink-0">
-          <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+        <div className="w-8 h-8 rounded-full border border-gold flex items-center justify-center overflow-hidden shrink-0 bg-dark shadow-[0_0_10px_rgba(212,175,55,0.4)]">
+          {!logoError ? (
+            <img
+              src="./logo.png"
+              alt="Logo"
+              className="w-full h-full object-cover"
+              onError={() => setLogoError(true)}
+            />
+          ) : (
+            <Building2 className="text-gold w-5 h-5" />
+          )}
         </div>
         <h1 className="text-gold font-bold text-lg leading-none tracking-wide">Önkal Premium Cari</h1>
       </div>

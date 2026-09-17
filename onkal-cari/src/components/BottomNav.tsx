@@ -29,24 +29,16 @@ export default function BottomNav() {
 
   return (
     <>
-      <div className="fixed bottom-0 w-full max-w-md bg-gold-gradient rounded-t-3xl shadow-[0_-5px_20px_rgba(212,175,55,0.3)] px-6 pt-3 pb-5 flex justify-between items-end z-50">
-        <button className="text-dark/80 hover:text-dark transition-colors flex flex-col items-center gap-1 mb-2">
+      <div className="fixed bottom-0 w-full max-w-md bg-gradient-to-r from-[#d4af37] via-[#faea9e] to-[#aa8022] text-slate-900 rounded-t-3xl shadow-[0_-5px_25px_rgba(0,0,0,0.5)] px-6 pt-3 pb-5 flex justify-between items-end z-50">
+        <button className="text-slate-800 hover:text-black transition-colors flex flex-col items-center gap-1 mb-2">
           <Share2 size={24} />
         </button>
-        <button className="text-dark/80 hover:text-dark transition-colors flex flex-col items-center gap-1 mb-2">
+        <button className="text-slate-800 hover:text-black transition-colors flex flex-col items-center gap-1 mb-2">
           <Monitor size={24} />
         </button>
 
         {/* Center Actions Container */}
         <div className="relative flex items-end justify-center">
-          {/* H Button */}
-          <button
-            onClick={() => setIsReminderOpen(true)}
-            className="absolute -left-12 bottom-2 w-10 h-10 bg-dark border-2 border-gold rounded-full flex items-center justify-center text-gold shadow-lg hover:scale-105 transition-transform font-bold text-lg"
-          >
-            H
-          </button>
-
           {/* Main + Button */}
           <button
             onClick={handleAdd}
@@ -54,12 +46,20 @@ export default function BottomNav() {
           >
             <Plus size={32} strokeWidth={3} />
           </button>
+
+          {/* H Button */}
+          <button
+            onClick={() => setIsReminderOpen(true)}
+            className="absolute -right-12 bottom-2 w-10 h-10 bg-dark border-2 border-gold rounded-full flex items-center justify-center text-gold shadow-lg hover:scale-105 transition-transform font-bold text-lg"
+          >
+            H
+          </button>
         </div>
 
-        <button className="text-dark/80 hover:text-dark transition-colors flex flex-col items-center gap-1 mb-2">
+        <button className="text-slate-800 hover:text-black transition-colors flex flex-col items-center gap-1 mb-2">
           <Timer size={24} />
         </button>
-        <Link to="/" className="text-dark/80 hover:text-dark transition-colors flex flex-col items-center gap-1 mb-2">
+        <Link to="/" className="text-slate-800 hover:text-black transition-colors flex flex-col items-center gap-1 mb-2">
           <Menu size={24} />
         </Link>
       </div>

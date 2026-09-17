@@ -1,13 +1,10 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useStore, type Transaction } from '../store/useStore';
-import TopBar from '../components/TopBar';
-import BottomNav from '../components/BottomNav';
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 
 export default function HesapDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { records, updateRecord, loading } = useStore();
 
   const record = records.find(r => r.id === id);
@@ -51,17 +48,10 @@ export default function HesapDetail() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-24 bg-dark">
-      <TopBar />
-
-      <div className="flex items-center gap-2 p-4 border-b border-gold/30">
-        <button onClick={() => navigate(-1)} className="text-gold hover:text-gold-light transition-colors">
-          <ChevronLeft size={28} />
-        </button>
-        <div className="flex flex-col">
-          <h2 className="text-gold font-bold text-xl truncate">{record.name}</h2>
-          <span className="text-gray-400 text-xs">Hesap Detayları</span>
-        </div>
+    <div className="flex flex-col flex-1 pb-8">
+      <div className="flex flex-col p-4 border-b border-gold/30">
+        <h2 className="text-gold font-bold text-2xl truncate">{record.name}</h2>
+        <span className="text-gray-400 text-sm">Hesap Detayları</span>
       </div>
 
       <div className="flex w-full border-b border-gray-800 bg-gray-900">
@@ -82,9 +72,9 @@ export default function HesapDetail() {
       <div className="p-4 flex-1 overflow-auto">
 
         {/* Net Bakiye Summary */}
-        <div className="mb-6 p-4 bg-gray-900 border border-gold/50 rounded-xl flex justify-between items-center shadow-lg">
-          <span className="text-gray-400 font-semibold tracking-wide">Net Bakiye</span>
-          <span className={`text-2xl font-bold ${totalGelir - totalGider >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+        <div className="mb-6 p-4 bg-[#121827] border border-gold/50 rounded-xl flex justify-between items-center shadow-lg backdrop-blur-sm">
+          <span className="text-gray-300 font-semibold tracking-wide">Net Bakiye</span>
+          <span className={`text-2xl font-bold ${totalGelir - totalGider >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {formatCurrency(totalGelir - totalGider)}
           </span>
         </div>
@@ -92,16 +82,16 @@ export default function HesapDetail() {
         {/* Transaction List */}
         <div className="flex flex-col gap-3">
           {currentTransactions.map(tx => (
-            <div key={tx.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex justify-between items-center shadow-md">
+            <div key={tx.id} className="bg-gray-900 border border-gold/20 rounded-xl p-4 flex justify-between items-center shadow-md">
               <div className="flex-1 mr-2 truncate text-gray-200 font-medium">
                 {tx.description}
               </div>
               <div className="flex items-center gap-4">
-                <span className={`font-bold ${tx.type === 'gelir' ? 'text-green-500' : 'text-red-500'}`}>
+                <span className={`font-bold ${tx.type === 'gelir' ? 'text-green-400' : 'text-red-400'}`}>
                   {formatCurrency(tx.amount)}
                 </span>
-                <button onClick={() => handleDeleteRow(tx.id)} className="text-gray-500 hover:text-red-500 transition-colors">
-                  <Trash2 size={20} />
+                <button onClick={() => handleDeleteRow(tx.id)} className="text-gray-500 hover:text-red-500 transition-colors p-2 bg-dark/50 rounded-full">
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
@@ -117,12 +107,10 @@ export default function HesapDetail() {
 
         {/* Total Footer */}
         <div className="mt-8 p-4 border-t border-gold/50 bg-gray-900 rounded-xl flex justify-between items-center shadow-lg">
-          <span className="font-bold text-lg text-gold">Genel Toplam:</span>
+          <span className="font-bold text-lg text-gold">Sekme Toplamı:</span>
           <span className="font-bold text-xl text-gold">{formatCurrency(currentTotal)}</span>
         </div>
       </div>
-
-      <BottomNav />
     </div>
   );
 }
