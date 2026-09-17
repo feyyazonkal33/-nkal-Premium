@@ -5,5 +5,5 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   // Repository adına uygun base path ayarı
-  base: '/Onkal-Premium/',
+  base: './',
 })

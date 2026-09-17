@@ -43,28 +43,30 @@ export default function TopBar() {
   };
 
   return (
-    <div className="w-full bg-dark px-4 py-2 border-b border-gold/30">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {/* Small Top Logo */}
-          <div className="w-8 h-8 rounded-full border border-gold flex items-center justify-center bg-gold/10">
-            <span className="text-gold font-bold text-xs">ÖP</span>
-          </div>
-          <h1 className="text-gold font-bold text-lg leading-none">Önkal Premium Cari</h1>
+    <div className="w-full bg-dark px-4 py-3 border-b border-gold/30">
+      <div className="flex items-center gap-3">
+        {/* Small Top Logo */}
+        <div className="w-8 h-8 rounded-full border border-gold overflow-hidden shrink-0">
+          <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
         </div>
+        <h1 className="text-gold font-bold text-lg leading-none tracking-wide">Önkal Premium Cari</h1>
       </div>
 
       {/* Info Bar */}
-      <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
-        <div>{formatDate(time)} - {formatTime(time)}</div>
+      <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
+        <div>{formatDate(time)} {formatTime(time)}</div>
         <div className="flex items-center gap-1">
+          <span>İzmir:</span>
           {weather ? (
             <>
               {weather.isDay ? <Sun size={14} className="text-gold" /> : <Cloud size={14} />}
               <span>{weather.temp}°C</span>
             </>
           ) : (
-            <span>--°C</span>
+            <>
+              <Sun size={14} className="text-gold" />
+              <span>--°C</span>
+            </>
           )}
         </div>
       </div>
