@@ -16,6 +16,13 @@ interface CashItem {
   amount: number;
 }
 
+interface YevmiyeItem {
+  id: string;
+  date: string;
+  workerCount: number;
+  note: string;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -26,6 +33,11 @@ interface Project {
   measurements: RoomMeasurements[];
   gelirler: CashItem[];
   giderler: CashItem[];
+  // Gün Sayacı & Yevmiye Alanları
+  startDate?: string;
+  isCounterActive?: boolean;
+  counterElapsedDays?: number;
+  yevmiyeler: YevmiyeItem[];
 }
 
 // Matematiksel Metraj Hesaplayıcı (16x2.40 veya 16*2.40 desteği)
@@ -48,6 +60,21 @@ const evalMeasurement = (val: string | number | undefined): number => {
   return isNaN(parsed) ? 0 : Number(parsed.toFixed(2));
 };
 
+// Gün Sayacı Hesaplayıcı
+const calculateDays = (startDate?: string, isActive?: boolean, frozenDays?: number): number => {
+  if (!startDate) return 0;
+  if (!isActive && frozenDays !== undefined && frozenDays > 0) {
+    return frozenDays;
+  }
+  const start = new Date(startDate);
+  const now = new Date();
+  start.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  const diffTime = now.getTime() - start.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  return diffDays > 0 ? diffDays : 1;
+};
+
 const INITIAL_PROJECTS: Project[] = [
   {
     id: '1',
@@ -61,7 +88,13 @@ const INITIAL_PROJECTS: Project[] = [
       { id: 'm2', banyo: '10', ebeveyn: '7', wc: '4', mutfak: '22', odalar: '60' },
     ],
     gelirler: [],
-    giderler: []
+    giderler: [],
+    startDate: new Date().toISOString().split('T')[0],
+    isCounterActive: true,
+    counterElapsedDays: 1,
+    yevmiyeler: [
+      { id: 'y1', date: new Date().toISOString().split('T')[0], workerCount: 3, note: 'Banyo su yalıtımı ve şap atıldı' }
+    ]
   },
   {
     id: '2',
@@ -76,7 +109,8 @@ const INITIAL_PROJECTS: Project[] = [
     ],
     giderler: [
       { id: 'gd1', title: 'Kum ve Çimento', amount: 12000 },
-    ]
+    ],
+    yevmiyeler: []
   },
   {
     id: '3',
@@ -87,7 +121,8 @@ const INITIAL_PROJECTS: Project[] = [
     alacakVerecekNote: '',
     measurements: [],
     gelirler: [],
-    giderler: []
+    giderler: [],
+    yevmiyeler: []
   }
 ];
 
@@ -99,6 +134,10 @@ export default function App() {
       return parsed.map((p: any) => ({
         ...p,
         name: p.name === 'Nkal Şantiye' ? 'Önkal Şantiye' : p.name,
+        yevmiyeler: p.yevmiyeler || [],
+        startDate: p.startDate || '',
+        isCounterActive: p.isCounterActive ?? false,
+        counterElapsedDays: p.counterElapsedDays || 0,
         measurements: (p.measurements || []).map((m: any) => ({
           id: m.id || Date.now().toString(),
           banyo: String(m.banyo ?? ''),
@@ -126,7 +165,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'iscilik' | 'hesap'>('iscilik');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [activeModal, setActiveModal] = useState<'h_note' | 'm2_note' | 'alacak_note' | 'spreadsheet' | 'new_proj' | null>(null);
+  const [activeModal, setActiveModal] = useState<'h_note' | 'm2_note' | 'alacak_note' | 'spreadsheet' | 'new_proj' | 'yevmiye' | null>(null);
 
   // Proje Silme Modalı State
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
@@ -139,7 +178,12 @@ export default function App() {
   const [cashTitle, setCashTitle] = useState('');
   const [cashAmount, setCashAmount] = useState('');
 
-  // Aktif Hücre Takibi (Hızlı Tuşlar İçin)
+  // Yevmiye Form State
+  const [yevDate, setYevDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [yevCount, setYevCount] = useState<string>('1');
+  const [yevNote, setYevNote] = useState<string>('');
+
+  // Aktif Hücre Takibi (Metraj Hızlı Tuşlar İçin)
   const [activeCell, setActiveCell] = useState<{ rowId: string; col: keyof RoomMeasurements } | null>(null);
 
   const [newProjectName, setNewProjectName] = useState('');
@@ -163,13 +207,18 @@ export default function App() {
       alacakVerecekNote: '',
       measurements: [],
       gelirler: [],
-      giderler: []
+      giderler: [],
+      startDate: new Date().toISOString().split('T')[0],
+      isCounterActive: true,
+      counterElapsedDays: 1,
+      yevmiyeler: []
     };
     setProjects([newProj, ...projects]);
     setNewProjectName('');
     setActiveModal(null);
   };
 
+  // Gelir / Gider Kaydet
   const handleSaveCashItem = () => {
     if (!cashTitle.trim()) {
       alert('Lütfen açıklama girin.');
@@ -200,7 +249,51 @@ export default function App() {
     setCashModal({ isOpen: false, type: 'gelir' });
   };
 
-  // Aktif Hücreye Sembol Ekleme Fonksiyonu
+  // Yevmiye Ekle
+  const handleAddYevmiye = () => {
+    const count = parseFloat(yevCount);
+    if (isNaN(count) || count <= 0) {
+      alert('Lütfen geçerli bir kişi/yevmiye sayısı girin.');
+      return;
+    }
+    const newItem: YevmiyeItem = {
+      id: Date.now().toString(),
+      date: yevDate || new Date().toISOString().split('T')[0],
+      workerCount: count,
+      note: yevNote.trim()
+    };
+    updateCurrentProject(prev => ({
+      ...prev,
+      yevmiyeler: [newItem, ...(prev.yevmiyeler || [])]
+    }));
+    setYevNote('');
+    setYevCount('1');
+  };
+
+  // Sayaç Aç / Kapat (ON / OFF)
+  const handleToggleCounter = () => {
+    if (!currentProject) return;
+    const isCurrentlyActive = !!currentProject.isCounterActive;
+    if (isCurrentlyActive) {
+      // Kapatılıyor (OFF): Şu anki gün sayısını dondur
+      const frozen = calculateDays(currentProject.startDate, true, currentProject.counterElapsedDays);
+      updateCurrentProject(prev => ({
+        ...prev,
+        isCounterActive: false,
+        counterElapsedDays: frozen
+      }));
+    } else {
+      // Açılıyor (ON): Başlama tarihi yoksa bugünü ata ve aktifleştir
+      const start = currentProject.startDate || new Date().toISOString().split('T')[0];
+      updateCurrentProject(prev => ({
+        ...prev,
+        startDate: start,
+        isCounterActive: true
+      }));
+    }
+  };
+
+  // Aktif Hücreye Sembol Ekleme
   const insertSymbol = (sym: string) => {
     if (!activeCell || !currentProject) return;
     updateCurrentProject(prev => ({
@@ -215,7 +308,7 @@ export default function App() {
     }));
   };
 
-  // WhatsApp ile Hakediş Metraj Dökümü Paylaşma
+  // WhatsApp ile m² Hakediş Metraj Dökümü Paylaşma
   const handleShareWhatsApp = () => {
     if (!currentProject) return;
     const bSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.banyo), 0);
@@ -236,6 +329,26 @@ export default function App() {
 • Odalar: *${oSum.toFixed(2)} m²*
 ━━━━━━━━━━━━━━━━━━
 🏆 *GENEL TOPLAM: ${gTotal.toFixed(2)} m²*
+📅 _Tarih: ${new Date().toLocaleDateString('tr-TR')} - ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}_`;
+
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  // WhatsApp ile Yevmiye Dökümü Paylaşma
+  const handleShareYevmiyeWhatsApp = () => {
+    if (!currentProject) return;
+    const totalYev = (currentProject.yevmiyeler || []).reduce((acc, item) => acc + Number(item.workerCount || 0), 0);
+    const logs = (currentProject.yevmiyeler || [])
+      .map(y => `• ${y.date}: *${y.workerCount} Kişi* ${y.note ? `(${y.note})` : ''}`)
+      .join('\n');
+
+    const message =
+`🏗️ *ÖNKAL PREMİUM İNŞAAT*
+📍 *Proje:* ${currentProject.name}
+👷 *Şantiye Yevmiye Dökümü:*
+${logs || 'Henüz kayıt girilmedi.'}
+━━━━━━━━━━━━━━━━━━
+🏆 *TOPLAM YEVMİYE: ${totalYev} Kişi/Gün*
 📅 _Tarih: ${new Date().toLocaleDateString('tr-TR')} - ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}_`;
 
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
@@ -372,7 +485,6 @@ export default function App() {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                      {/* SİLME BUTONU */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -405,6 +517,66 @@ export default function App() {
             {/* İŞÇİLİK MODÜLÜ DETAYI */}
             {currentProject?.type === 'iscilik' && (
               <div className="space-y-3">
+
+                {/* 1. İŞE BAŞLAMA TARİHİ VE ON/OFF GÜN SAYACI KARTI (HESAP KARTI FORMATINDA) */}
+                {(() => {
+                  const days = calculateDays(currentProject.startDate, currentProject.isCounterActive, currentProject.counterElapsedDays);
+                  return (
+                    <div className="bg-gradient-to-br from-[#10172c] via-[#0d1426] to-[#070b16] border border-amber-500/35 rounded-2xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs">⏱️</span>
+                          <span className="text-[10px] uppercase tracking-widest text-amber-200/70 font-bold">
+                            İş Süresi & Gün Sayacı
+                          </span>
+                        </div>
+
+                        {/* ON / OFF Butonu */}
+                        <button
+                          onClick={handleToggleCounter}
+                          className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider transition-all flex items-center space-x-1.5 active:scale-95 ${
+                            currentProject.isCounterActive
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_12px_rgba(52,211,153,0.35)]'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${currentProject.isCounterActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                          <span>{currentProject.isCounterActive ? 'SAYAÇ: ON' : 'SAYAÇ: OFF'}</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-1">
+                        <div>
+                          <div className={`text-3xl font-black font-mono tracking-tight ${currentProject.isCounterActive ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]' : 'text-amber-300'}`}>
+                            {days} <span className="text-sm font-bold text-slate-400 font-sans">Gün</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {currentProject.isCounterActive ? '🟢 Şantiye devam ediyor (Gün işliyor)' : '⏸️ Şantiye tamamlandı (Sayaç durduruldu)'}
+                          </p>
+                        </div>
+
+                        {/* Başlama Tarihi Seçimi */}
+                        <div className="text-right">
+                          <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Başlama Tarihi</label>
+                          <input
+                            type="date"
+                            value={currentProject.startDate || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateCurrentProject(prev => ({
+                                ...prev,
+                                startDate: val
+                              }));
+                            }}
+                            className="bg-[#060912] border border-amber-500/30 text-amber-200 text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-amber-400 font-mono shadow-inner"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 2. m² ÖLÇÜLERİ BUTONU */}
                 <button
                   onClick={() => setActiveModal('spreadsheet')}
                   className="w-full bg-[#10172c] border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between shadow-lg active:scale-[0.98] transition-all hover:border-amber-400"
@@ -421,6 +593,26 @@ export default function App() {
                   </span>
                 </button>
 
+                {/* 3. YENİ: YEVMİYE TAKİBİ BUTONU */}
+                <button
+                  onClick={() => setActiveModal('yevmiye')}
+                  className="w-full bg-[#10172c] border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between shadow-lg active:scale-[0.98] transition-all hover:border-amber-400"
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xl">👷</span>
+                    <div className="text-left">
+                      <div className="text-sm font-bold text-amber-200">Yevmiye Takibi</div>
+                      <div className="text-[11px] text-slate-400">
+                        Toplam: {(currentProject.yevmiyeler || []).reduce((acc, i) => acc + Number(i.workerCount || 0), 0)} Kişi/Gün çalışma kaydı
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg font-bold">
+                    Yevmiye Aç ✏️
+                  </span>
+                </button>
+
+                {/* 4. m² FİYATI NOTU */}
                 <button
                   onClick={() => setActiveModal('m2_note')}
                   className="w-full bg-[#10172c] border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between shadow-lg active:scale-[0.98] transition-all hover:border-amber-400"
@@ -435,6 +627,7 @@ export default function App() {
                   <span className="text-xs text-amber-400 font-semibold">Düzenle ✏️</span>
                 </button>
 
+                {/* 5. ALACAK / VERECEK NOTU */}
                 <button
                   onClick={() => setActiveModal('alacak_note')}
                   className="w-full bg-[#10172c] border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between shadow-lg active:scale-[0.98] transition-all hover:border-amber-400"
@@ -488,7 +681,6 @@ export default function App() {
                       KAYITLAR
                     </span>
 
-                    {/* AYRI AYRI İKİ BUTON */}
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {
@@ -566,11 +758,10 @@ export default function App() {
         )}
       </main>
 
-      {/* 2. SABİT ALT NAVİGASYON BARI (SİMETRİK 3'LÜ YUVALAK KOKPİT) */}
+      {/* 2. SABİT ALT NAVİGASYON BARI */}
       <nav className="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto z-40">
         <div className="relative bg-gradient-to-r from-[#cfa12b] via-[#faeb9e] to-[#996e14] text-slate-950 px-8 py-3 rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.6)] flex items-center justify-between border-t border-amber-300/40">
 
-          {/* SOL: YUVARLAK PAYLAŞ BUTONU ("H" FORMATINDA) */}
           <button
             onClick={() => {
               if (navigator.clipboard) {
@@ -588,7 +779,6 @@ export default function App() {
             </svg>
           </button>
 
-          {/* ORTA: YÜKSELTİLMİŞ ALTIN "+" BUTONU */}
           <div className="relative -top-5">
             <button
               onClick={() => setActiveModal('new_proj')}
@@ -601,7 +791,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* SAĞ: YUVARLAK "H" (HATIRLATMA) BUTONU */}
           <button
             onClick={() => setActiveModal('h_note')}
             className="w-10 h-10 rounded-full bg-[#111726] text-[#e8c76b] font-black text-sm border border-amber-400 shadow-md flex items-center justify-center active:scale-90 transition-transform"
@@ -613,6 +802,142 @@ export default function App() {
       </nav>
 
       {/* --- MODALLAR --- */}
+
+      {/* YEVMİYE TAKİBİ MODALI */}
+      {activeModal === 'yevmiye' && currentProject && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
+          <div className="w-full max-w-md bg-[#0c1222] border border-amber-500/50 rounded-3xl p-4 shadow-2xl flex flex-col max-h-[90vh]">
+
+            {/* Başlık */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">👷</span>
+                <div>
+                  <span className="text-sm font-bold text-amber-300 block leading-tight">Yevmiye Takibi</span>
+                  <span className="text-[10px] text-slate-400">{currentProject.name}</span>
+                </div>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="w-7 h-7 rounded-full bg-slate-800/60 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+            </div>
+
+            {/* Toplam Yevmiye Gösterge Kartı */}
+            {(() => {
+              const totalYev = (currentProject.yevmiyeler || []).reduce((acc, item) => acc + Number(item.workerCount || 0), 0);
+              return (
+                <div className="my-2.5 p-3 rounded-2xl bg-gradient-to-r from-[#121a30] via-[#172342] to-[#121a30] border border-amber-500/40 shadow-xl flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">TOPLAM YEVMİYE (ADAM/GÜN)</div>
+                    <div className="text-[10px] text-slate-400">Toplam Kayıt: {(currentProject.yevmiyeler || []).length} Gün</div>
+                  </div>
+                  <div className="text-2xl font-black text-emerald-400 font-mono drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
+                    {totalYev} <span className="text-xs font-semibold text-slate-300 font-sans">Kişi</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Yeni Yevmiye Ekleme Formu */}
+            <div className="bg-[#080d1a] border border-amber-500/25 rounded-2xl p-3 mb-2.5 space-y-2 shadow-inner">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Tarih</label>
+                  <input
+                    type="date"
+                    value={yevDate}
+                    onChange={e => setYevDate(e.target.value)}
+                    className="w-full bg-[#060912] border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Kişi / Yevmiye</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    placeholder="Örn: 2 veya 3.5"
+                    value={yevCount}
+                    onChange={e => setYevCount(e.target.value)}
+                    className="w-full bg-[#060912] border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 font-mono font-bold focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Açıklama / Yapılan İş</label>
+                <div className="flex space-x-1.5">
+                  <input
+                    type="text"
+                    placeholder="Örn: Mutfak seramik, kalıp sökümü..."
+                    value={yevNote}
+                    onChange={e => setYevNote(e.target.value)}
+                    className="flex-1 bg-[#060912] border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400 shadow-inner"
+                  />
+                  <button
+                    onClick={handleAddYevmiye}
+                    className="px-4 py-1.5 bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-md active:scale-95 transition-all"
+                  >
+                    Ekle
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Eklenen Yevmiyeler Listesi */}
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-56">
+              {(currentProject.yevmiyeler || []).length === 0 ? (
+                <div className="text-center py-6 text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+                  Henüz yevmiye kaydı eklenmedi.
+                </div>
+              ) : (
+                (currentProject.yevmiyeler || []).map((item) => (
+                  <div key={item.id} className="flex justify-between items-center p-2 rounded-xl bg-[#080d1a] border border-slate-800 text-xs hover:border-amber-500/30 transition-all">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] text-amber-300/80 font-mono font-semibold">{item.date}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[10px]">
+                          {item.workerCount} Kişi
+                        </span>
+                      </div>
+                      {item.note && (
+                        <div className="text-[11px] text-slate-300">{item.note}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        updateCurrentProject(prev => ({
+                          ...prev,
+                          yevmiyeler: (prev.yevmiyeler || []).filter(y => y.id !== item.id)
+                        }));
+                      }}
+                      className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      title="Sil"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* WhatsApp ile Yevmiye Paylaşımı */}
+            <button
+              onClick={handleShareYevmiyeWhatsApp}
+              className="w-full mt-2.5 py-2.5 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-2xl shadow-[0_4px_15px_rgba(16,185,129,0.3)] flex items-center justify-center space-x-2 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+              </svg>
+              <span>WhatsApp ile Yevmiye Raporunu Paylaş</span>
+            </button>
+
+            <button
+              onClick={() => setActiveModal(null)}
+              className="w-full mt-2 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl"
+            >
+              Kapat
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* PROJE SİLME ONAY MODALI */}
       {projectToDelete && (
@@ -653,7 +978,6 @@ export default function App() {
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
           <div className="w-full max-w-md bg-[#0c1222] border border-amber-500/50 rounded-3xl p-4 shadow-2xl flex flex-col max-h-[90vh]">
 
-            {/* Başlık ve Kapat Butonu */}
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center space-x-2">
                 <span className="text-lg">📐</span>
@@ -665,7 +989,7 @@ export default function App() {
               <button onClick={() => setActiveModal(null)} className="w-7 h-7 rounded-full bg-slate-800/60 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
             </div>
 
-            {/* HIZLI TUŞLAR (MOBİLDE ÇARPI X GİRİŞİ İÇİN) */}
+            {/* HIZLI TUŞLAR */}
             <div className="flex items-center justify-between px-3 py-1.5 bg-[#070b14] border border-amber-500/20 rounded-xl my-2">
               <span className="text-[10px] text-amber-200/70 font-bold">Hızlı Tuş:</span>
               <div className="flex items-center space-x-1.5">
@@ -693,7 +1017,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Tablo Alanı */}
+            {/* Tablo */}
             <div className="flex-1 overflow-x-auto overflow-y-auto">
               <table className="w-full text-[11px] text-center border-collapse">
                 <thead>
@@ -740,7 +1064,7 @@ export default function App() {
                     </tr>
                   ))}
 
-                  {/* SÜTUN TOPLAMLARI (AYIRICI ÇİZGİNİN ALTINDA) */}
+                  {/* Sütun Toplamları */}
                   <tr className="bg-[#10192e] font-bold text-amber-300 border-t-2 border-amber-500/50">
                     {(['banyo', 'ebeveyn', 'wc', 'mutfak', 'odalar'] as const).map(col => {
                       const sum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r[col]), 0);
@@ -756,7 +1080,7 @@ export default function App() {
               </table>
             </div>
 
-            {/* BÜYÜK GENEL TOPLAM ALANI */}
+            {/* Büyük Genel Toplam */}
             {(() => {
               const bSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.banyo), 0);
               const eSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.ebeveyn), 0);
@@ -783,7 +1107,7 @@ export default function App() {
               );
             })()}
 
-            {/* WHATSAPP İLE HAKEDİŞ PAYLAŞ BUTONU */}
+            {/* WhatsApp Butonu */}
             <button
               onClick={handleShareWhatsApp}
               className="w-full mt-2.5 py-2.5 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-2xl shadow-[0_4px_15px_rgba(16,185,129,0.3)] flex items-center justify-center space-x-2 active:scale-95 transition-all"
@@ -794,7 +1118,6 @@ export default function App() {
               <span>WhatsApp ile Hakediş Dökümünü Paylaş</span>
             </button>
 
-            {/* Satır Ekle & Tamam Butonları */}
             <div className="flex space-x-2 mt-2 pt-2 border-t border-slate-800">
               <button
                 onClick={() => {
