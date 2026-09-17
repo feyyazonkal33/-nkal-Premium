@@ -3,11 +3,11 @@ import { useState, useEffect } from 'react';
 // --- VERİ TİPLERİ ---
 interface RoomMeasurements {
   id: string;
-  banyo: number;
-  ebeveyn: number;
-  wc: number;
-  mutfak: number;
-  odalar: number;
+  banyo: string;
+  ebeveyn: string;
+  wc: string;
+  mutfak: string;
+  odalar: string;
 }
 
 interface CashItem {
@@ -28,6 +28,26 @@ interface Project {
   giderler: CashItem[];
 }
 
+// Matematiksel Metraj Hesaplayıcı (16x2.40 veya 16*2.40 desteği)
+const evalMeasurement = (val: string | number | undefined): number => {
+  if (!val) return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  const s = val.toString().replace(/,/g, '.').trim().toLowerCase();
+  if (s.includes('x') || s.includes('*')) {
+    const parts = s.split(/[x*]/).map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+    if (parts.length === 0) return 0;
+    const res = parts.reduce((acc, curr) => acc * curr, 1);
+    return isNaN(res) ? 0 : Number(res.toFixed(2));
+  }
+  if (s.includes('+')) {
+    const parts = s.split('+').map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+    const res = parts.reduce((acc, curr) => acc + curr, 0);
+    return isNaN(res) ? 0 : Number(res.toFixed(2));
+  }
+  const parsed = parseFloat(s);
+  return isNaN(parsed) ? 0 : Number(parsed.toFixed(2));
+};
+
 const INITIAL_PROJECTS: Project[] = [
   {
     id: '1',
@@ -37,8 +57,8 @@ const INITIAL_PROJECTS: Project[] = [
     m2PriceNote: 'Birim m² fiyatı: 850 TL + KDV olarak anlaşıldı.',
     alacakVerecekNote: 'Alınan Peşinat: 150.000 TL\nKalan Bakiye: 85.000 TL',
     measurements: [
-      { id: 'm1', banyo: 12, ebeveyn: 8, wc: 4, mutfak: 25, odalar: 65 },
-      { id: 'm2', banyo: 10, ebeveyn: 7, wc: 4, mutfak: 22, odalar: 60 },
+      { id: 'm1', banyo: '12', ebeveyn: '8', wc: '4', mutfak: '25', odalar: '65' },
+      { id: 'm2', banyo: '10', ebeveyn: '7', wc: '4', mutfak: '22', odalar: '60' },
     ],
     gelirler: [],
     giderler: []
@@ -76,8 +96,18 @@ export default function App() {
     const saved = localStorage.getItem('onkal_cari_v1');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Eski isim hafızada kaldıysa otomatik düzelt
-      return parsed.map((p: Project) => p.name === 'Nkal Şantiye' ? { ...p, name: 'Önkal Şantiye' } : p);
+      return parsed.map((p: any) => ({
+        ...p,
+        name: p.name === 'Nkal Şantiye' ? 'Önkal Şantiye' : p.name,
+        measurements: (p.measurements || []).map((m: any) => ({
+          id: m.id || Date.now().toString(),
+          banyo: String(m.banyo ?? ''),
+          ebeveyn: String(m.ebeveyn ?? ''),
+          wc: String(m.wc ?? ''),
+          mutfak: String(m.mutfak ?? ''),
+          odalar: String(m.odalar ?? '')
+        }))
+      }));
     }
     return INITIAL_PROJECTS;
   });
@@ -98,6 +128,9 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<'h_note' | 'm2_note' | 'alacak_note' | 'spreadsheet' | 'new_proj' | null>(null);
 
+  // Proje Silme Modalı State
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
   // Gelir / Gider Özel Modal
   const [cashModal, setCashModal] = useState<{ isOpen: boolean; type: 'gelir' | 'gider' }>({
     isOpen: false,
@@ -105,6 +138,9 @@ export default function App() {
   });
   const [cashTitle, setCashTitle] = useState('');
   const [cashAmount, setCashAmount] = useState('');
+
+  // Aktif Hücre Takibi (Hızlı Tuşlar İçin)
+  const [activeCell, setActiveCell] = useState<{ rowId: string; col: keyof RoomMeasurements } | null>(null);
 
   const [newProjectName, setNewProjectName] = useState('');
   const [logoImgError, setLogoImgError] = useState(false);
@@ -162,6 +198,47 @@ export default function App() {
     setCashTitle('');
     setCashAmount('');
     setCashModal({ isOpen: false, type: 'gelir' });
+  };
+
+  // Aktif Hücreye Sembol Ekleme Fonksiyonu
+  const insertSymbol = (sym: string) => {
+    if (!activeCell || !currentProject) return;
+    updateCurrentProject(prev => ({
+      ...prev,
+      measurements: prev.measurements.map(r => {
+        if (r.id === activeCell.rowId) {
+          const curVal = r[activeCell.col] || '';
+          return { ...r, [activeCell.col]: curVal + sym };
+        }
+        return r;
+      })
+    }));
+  };
+
+  // WhatsApp ile Hakediş Metraj Dökümü Paylaşma
+  const handleShareWhatsApp = () => {
+    if (!currentProject) return;
+    const bSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.banyo), 0);
+    const eSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.ebeveyn), 0);
+    const wSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.wc), 0);
+    const mSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.mutfak), 0);
+    const oSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.odalar), 0);
+    const gTotal = bSum + eSum + wSum + mSum + oSum;
+
+    const message =
+`🏗️ *ÖNKAL PREMİUM İNŞAAT*
+📍 *Proje:* ${currentProject.name}
+📐 *İşçilik Metraj Hakediş Dökümü:*
+• Banyo: *${bSum.toFixed(2)} m²*
+• Ebeveyn: *${eSum.toFixed(2)} m²*
+• WC: *${wSum.toFixed(2)} m²*
+• Mutfak / Koridor: *${mSum.toFixed(2)} m²*
+• Odalar: *${oSum.toFixed(2)} m²*
+━━━━━━━━━━━━━━━━━━
+🏆 *GENEL TOPLAM: ${gTotal.toFixed(2)} m²*
+📅 _Tarih: ${new Date().toLocaleDateString('tr-TR')} - ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}_`;
+
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const visibleProjects = projects.filter(p => p.type === activeTab);
@@ -293,11 +370,28 @@ export default function App() {
                         {project.status}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2 text-amber-400/70 group-hover:text-amber-400">
-                      <span className="text-xs text-slate-400 group-hover:text-amber-300 font-medium">Aç</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                      </svg>
+
+                    <div className="flex items-center space-x-2">
+                      {/* SİLME BUTONU */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectToDelete(project);
+                        }}
+                        className="w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-rose-500/20 flex items-center justify-center transition-colors active:scale-90"
+                        title="Projeyi Sil"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+
+                      <div className="flex items-center space-x-1 text-amber-400/70 group-hover:text-amber-400 pl-1">
+                        <span className="text-xs text-slate-400 group-hover:text-amber-300 font-medium">Aç</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -387,14 +481,14 @@ export default function App() {
                   );
                 })()}
 
-                {/* Gelir / Gider Listesi ve Modern Kapsül Ekleme Butonları */}
+                {/* Gelir / Gider Listesi ve Lüks Ekleme Butonları */}
                 <div className="bg-[#10172c]/90 border border-slate-800 rounded-2xl p-3.5 shadow-xl">
                   <div className="flex items-center justify-between mb-3.5">
                     <span className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider">
                       KAYITLAR
                     </span>
 
-                    {/* AYRI AYRI İKİ ŞIK BUTON */}
+                    {/* AYRI AYRI İKİ BUTON */}
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {
@@ -472,35 +566,34 @@ export default function App() {
         )}
       </main>
 
-      {/* 2. SABİT ALT NAVİGASYON BARI */}
+      {/* 2. SABİT ALT NAVİGASYON BARI (SİMETRİK 3'LÜ YUVALAK KOKPİT) */}
       <nav className="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto z-40">
-        <div className="relative bg-gradient-to-r from-[#cfa12b] via-[#faeb9e] to-[#996e14] text-slate-950 px-6 py-2.5 rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.6)] flex items-center justify-between border-t border-amber-300/40">
+        <div className="relative bg-gradient-to-r from-[#cfa12b] via-[#faeb9e] to-[#996e14] text-slate-950 px-8 py-3 rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.6)] flex items-center justify-between border-t border-amber-300/40">
 
+          {/* SOL: YUVARLAK PAYLAŞ BUTONU ("H" FORMATINDA) */}
           <button
-            onClick={() => alert('Bağlantı kopyalandı!')}
-            className="flex flex-col items-center justify-center text-slate-900 active:scale-90 transition-transform"
+            onClick={() => {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href);
+                alert('Önkal Premium bağlantısı kopyalandı!');
+              } else {
+                alert('Bağlantı kopyalandı!');
+              }
+            }}
+            className="w-10 h-10 rounded-full bg-[#111726] text-[#e8c76b] border border-amber-400 shadow-md flex items-center justify-center active:scale-90 transition-transform"
+            title="Uygulamayı Paylaş"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
             </svg>
-            <span className="text-[9px] font-bold">Paylaş</span>
           </button>
 
-          <button
-            onClick={() => setSelectedProjectId(null)}
-            className="flex flex-col items-center justify-center text-slate-900 active:scale-90 transition-transform"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
-            </svg>
-            <span className="text-[9px] font-bold">Projeler</span>
-          </button>
-
-          {/* ORTADAKİ YÜKSELTİLMİŞ "+" BUTONU */}
+          {/* ORTA: YÜKSELTİLMİŞ ALTIN "+" BUTONU */}
           <div className="relative -top-5">
             <button
               onClick={() => setActiveModal('new_proj')}
-              className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#151c2e] to-[#090d18] text-[#f7e396] border-2 border-amber-300 shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center justify-center active:scale-90 transition-transform"
+              className="w-13 h-13 p-3 rounded-full bg-gradient-to-tr from-[#151c2e] to-[#090d18] text-[#f7e396] border-2 border-amber-300 shadow-[0_4px_20px_rgba(0,0,0,0.6)] flex items-center justify-center active:scale-90 transition-transform"
+              title="Yeni Proje Ekle"
             >
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4"/>
@@ -508,32 +601,231 @@ export default function App() {
             </button>
           </div>
 
-          {/* "H" (HATIRLATMA) BUTONU */}
+          {/* SAĞ: YUVARLAK "H" (HATIRLATMA) BUTONU */}
           <button
             onClick={() => setActiveModal('h_note')}
-            className="w-8 h-8 rounded-full bg-[#111726] text-[#e8c76b] font-black text-sm border border-amber-400 shadow-md flex items-center justify-center active:scale-90 transition-transform"
+            className="w-10 h-10 rounded-full bg-[#111726] text-[#e8c76b] font-black text-sm border border-amber-400 shadow-md flex items-center justify-center active:scale-90 transition-transform"
+            title="Hatırlatma Notları"
           >
             H
-          </button>
-
-          <button
-            onClick={() => alert('Önkal Premium İnşaat - Cari Takip Sürüm v1.0')}
-            className="flex flex-col items-center justify-center text-slate-900 active:scale-90 transition-transform"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
-            <span className="text-[9px] font-bold">Menü</span>
           </button>
         </div>
       </nav>
 
-      {/* --- LÜKS BİLGİ KUTUCUĞU (MODERN GELİR/GİDER GİRİŞ PANELİ) --- */}
+      {/* --- MODALLAR --- */}
+
+      {/* PROJE SİLME ONAY MODALI */}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#0c1222]/95 border border-rose-500/40 rounded-3xl p-6 shadow-[0_15px_50px_rgba(0,0,0,0.85)] text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-base font-black text-slate-100 mb-1">Projeyi Sil</h3>
+            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+              <span className="font-bold text-amber-300">"{projectToDelete.name}"</span> projesini ve içerisindeki tüm hakediş/kasa kayıtlarını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+            </p>
+            <div className="flex space-x-2.5">
+              <button
+                onClick={() => setProjectToDelete(null)}
+                className="flex-1 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-200 bg-slate-800/50 hover:bg-slate-800 rounded-2xl transition-all"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={() => {
+                  setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
+                  setProjectToDelete(null);
+                }}
+                className="flex-1 py-2.5 text-xs font-black bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-2xl shadow-lg shadow-rose-600/30 active:scale-95 transition-all"
+              >
+                Evet, Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* İNŞAAT m² TABLOSU VE WHATSAPP HAKEDİŞ RAPORU */}
+      {activeModal === 'spreadsheet' && currentProject && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
+          <div className="w-full max-w-md bg-[#0c1222] border border-amber-500/50 rounded-3xl p-4 shadow-2xl flex flex-col max-h-[90vh]">
+
+            {/* Başlık ve Kapat Butonu */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">📐</span>
+                <div>
+                  <span className="text-sm font-bold text-amber-300 block leading-tight">İnşaat m² Ölçü Tablosu</span>
+                  <span className="text-[10px] text-slate-400">Çarpım için: "16x2.40" veya "16*2.40"</span>
+                </div>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="w-7 h-7 rounded-full bg-slate-800/60 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+            </div>
+
+            {/* HIZLI TUŞLAR (MOBİLDE ÇARPI X GİRİŞİ İÇİN) */}
+            <div className="flex items-center justify-between px-3 py-1.5 bg-[#070b14] border border-amber-500/20 rounded-xl my-2">
+              <span className="text-[10px] text-amber-200/70 font-bold">Hızlı Tuş:</span>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => insertSymbol('x')}
+                  className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-black rounded-lg text-xs border border-amber-500/40 active:scale-95 transition-all shadow-sm"
+                >
+                  × (Çarpı)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertSymbol(',')}
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg text-xs border border-slate-700 active:scale-95 transition-all shadow-sm"
+                >
+                  , (Virgül)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertSymbol('+')}
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg text-xs border border-slate-700 active:scale-95 transition-all shadow-sm"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Tablo Alanı */}
+            <div className="flex-1 overflow-x-auto overflow-y-auto">
+              <table className="w-full text-[11px] text-center border-collapse">
+                <thead>
+                  <tr className="bg-[#151e36] text-amber-200 border-b border-amber-500/30">
+                    <th className="p-2 border-r border-slate-800">Banyo</th>
+                    <th className="p-2 border-r border-slate-800">Ebeveyn</th>
+                    <th className="p-2 border-r border-slate-800">WC</th>
+                    <th className="p-2 border-r border-slate-800">Mutfak/Kor.</th>
+                    <th className="p-2">Odalar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentProject.measurements.map((row) => (
+                    <tr key={row.id} className="border-b border-slate-800/80 hover:bg-[#11182c]">
+                      {(['banyo', 'ebeveyn', 'wc', 'mutfak', 'odalar'] as const).map(col => {
+                        const calculated = evalMeasurement(row[col]);
+                        const isFormula = (row[col] || '').includes('x') || (row[col] || '').includes('*') || (row[col] || '').includes('+');
+                        return (
+                          <td key={col} className="p-1 border-r border-slate-800/60 last:border-r-0">
+                            <div className="flex flex-col items-center">
+                              <input
+                                type="text"
+                                value={row[col] || ''}
+                                placeholder="0"
+                                onFocus={() => setActiveCell({ rowId: row.id, col })}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  updateCurrentProject(prev => ({
+                                    ...prev,
+                                    measurements: prev.measurements.map(r => r.id === row.id ? { ...r, [col]: val } : r)
+                                  }));
+                                }}
+                                className="w-16 text-center bg-[#060912] border border-slate-800 rounded py-1 text-slate-100 font-mono text-xs focus:border-amber-400 focus:outline-none shadow-inner"
+                              />
+                              {isFormula && calculated > 0 && (
+                                <span className="text-[9px] text-emerald-400 font-mono mt-0.5">
+                                  ={calculated.toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+
+                  {/* SÜTUN TOPLAMLARI (AYIRICI ÇİZGİNİN ALTINDA) */}
+                  <tr className="bg-[#10192e] font-bold text-amber-300 border-t-2 border-amber-500/50">
+                    {(['banyo', 'ebeveyn', 'wc', 'mutfak', 'odalar'] as const).map(col => {
+                      const sum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r[col]), 0);
+                      return (
+                        <td key={col} className="p-2 border-r border-slate-800/60 last:border-r-0">
+                          <div className="text-[9px] uppercase text-amber-200/50 font-semibold">{col}</div>
+                          <div className="font-mono text-[11px] text-amber-300 font-black">{sum.toFixed(1)} m²</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* BÜYÜK GENEL TOPLAM ALANI */}
+            {(() => {
+              const bSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.banyo), 0);
+              const eSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.ebeveyn), 0);
+              const wSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.wc), 0);
+              const mSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.mutfak), 0);
+              const oSum = currentProject.measurements.reduce((acc, r) => acc + evalMeasurement(r.odalar), 0);
+              const grandTotal = bSum + eSum + wSum + mSum + oSum;
+
+              return (
+                <div className="mt-2.5 p-3 rounded-2xl bg-gradient-to-r from-[#121a30] via-[#172342] to-[#121a30] border border-amber-500/40 shadow-xl flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xl">🏆</span>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-amber-300/90 font-black">GENEL İŞÇİLİK METRAJI</div>
+                      <div className="text-[10px] text-slate-400">Tüm Mahaller Genel Toplamı</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xl font-black bg-gradient-to-r from-[#fae19c] via-[#d4af37] to-[#fce69a] bg-clip-text text-transparent font-mono">
+                      {grandTotal.toFixed(2)} m²
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* WHATSAPP İLE HAKEDİŞ PAYLAŞ BUTONU */}
+            <button
+              onClick={handleShareWhatsApp}
+              className="w-full mt-2.5 py-2.5 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-2xl shadow-[0_4px_15px_rgba(16,185,129,0.3)] flex items-center justify-center space-x-2 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+              </svg>
+              <span>WhatsApp ile Hakediş Dökümünü Paylaş</span>
+            </button>
+
+            {/* Satır Ekle & Tamam Butonları */}
+            <div className="flex space-x-2 mt-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  const newRow: RoomMeasurements = {
+                    id: Date.now().toString(),
+                    banyo: '', ebeveyn: '', wc: '', mutfak: '', odalar: ''
+                  };
+                  updateCurrentProject(prev => ({
+                    ...prev,
+                    measurements: [...prev.measurements, newRow]
+                  }));
+                }}
+                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-2xl transition-all"
+              >
+                + Yeni Satır Ekle
+              </button>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="flex-1 py-2 bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-black text-xs rounded-2xl shadow-md active:scale-95 transition-all"
+              >
+                Tamam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LÜKS GELİR / GİDER GİRİŞ PANELİ */}
       {cashModal.isOpen && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 transition-opacity">
           <div className="w-full max-w-sm bg-[#0c1222]/95 border border-amber-500/35 rounded-3xl p-6 shadow-[0_15px_50px_rgba(0,0,0,0.85)] relative overflow-hidden">
-
-            {/* Üst Dekoratif Işıma */}
             <div className={`absolute top-0 left-0 right-0 h-1.5 ${cashModal.type === 'gelir' ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600' : 'bg-gradient-to-r from-rose-500 via-red-400 to-rose-600'}`} />
 
             <div className="flex items-center justify-between mb-5">
@@ -556,15 +848,13 @@ export default function App() {
                 <label className="text-[10px] uppercase font-bold text-amber-200/70 tracking-wider block mb-1.5">
                   Kalem Açıklaması
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder={cashModal.type === 'gelir' ? 'Örn: Daire Satışı, Hakediş...' : 'Örn: Demir, Hazır Beton, İşçilik...'}
-                    value={cashTitle}
-                    onChange={e => setCashTitle(e.target.value)}
-                    className="w-full bg-[#060912] border border-slate-700/80 rounded-2xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/50 shadow-inner"
-                  />
-                </div>
+                <input
+                  type="text"
+                  placeholder={cashModal.type === 'gelir' ? 'Örn: Daire Satışı, Hakediş...' : 'Örn: Demir, Hazır Beton, İşçilik...'}
+                  value={cashTitle}
+                  onChange={e => setCashTitle(e.target.value)}
+                  className="w-full bg-[#060912] border border-slate-700/80 rounded-2xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/50 shadow-inner"
+                />
               </div>
 
               <div>
@@ -606,7 +896,7 @@ export default function App() {
         </div>
       )}
 
-      {/* DİĞER MODALLAR (YENİ PROJE, NOTLAR, ÖLÇÜ TABLOSU) */}
+      {/* YENİ PROJE EKLEME */}
       {activeModal === 'new_proj' && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[#0c1222] border border-amber-500/40 rounded-3xl p-6 shadow-2xl">
@@ -630,6 +920,7 @@ export default function App() {
         </div>
       )}
 
+      {/* "H" HATIRLATMA NOTLARI */}
       {activeModal === 'h_note' && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[#0c1222] border border-amber-500/40 rounded-3xl p-5 shadow-2xl flex flex-col h-[70vh]">
@@ -653,87 +944,7 @@ export default function App() {
         </div>
       )}
 
-      {activeModal === 'spreadsheet' && currentProject && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
-          <div className="w-full max-w-md bg-[#0c1222] border border-amber-500/50 rounded-3xl p-4 shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <span className="text-sm font-bold text-amber-300">📐 İnşaat m² Ölçü Tablosu</span>
-              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-
-            <div className="flex-1 overflow-x-auto overflow-y-auto mt-3">
-              <table className="w-full text-[11px] text-center border-collapse">
-                <thead>
-                  <tr className="bg-[#151e36] text-amber-200 border-b border-amber-500/30">
-                    <th className="p-1.5 border-r border-slate-800">Banyo</th>
-                    <th className="p-1.5 border-r border-slate-800">Ebeveyn</th>
-                    <th className="p-1.5 border-r border-slate-800">WC</th>
-                    <th className="p-1.5 border-r border-slate-800">Mutfak/Kor.</th>
-                    <th className="p-1.5">Odalar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentProject.measurements.map((row) => (
-                    <tr key={row.id} className="border-b border-slate-800/80 hover:bg-[#11182c]">
-                      {(['banyo', 'ebeveyn', 'wc', 'mutfak', 'odalar'] as const).map(col => (
-                        <td key={col} className="p-1 border-r border-slate-800/60 last:border-r-0">
-                          <input
-                            type="number"
-                            value={row[col] || ''}
-                            onChange={e => {
-                              const val = Number(e.target.value) || 0;
-                              updateCurrentProject(prev => ({
-                                ...prev,
-                                measurements: prev.measurements.map(r => r.id === row.id ? { ...r, [col]: val } : r)
-                              }));
-                            }}
-                            className="w-14 text-center bg-[#060912] border border-slate-800 rounded py-1 text-slate-200 focus:border-amber-400 focus:outline-none"
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                  <tr className="bg-amber-500/10 font-bold text-amber-300 border-t-2 border-amber-500/40">
-                    {(['banyo', 'ebeveyn', 'wc', 'mutfak', 'odalar'] as const).map(col => {
-                      const sum = currentProject.measurements.reduce((acc, r) => acc + (Number(r[col]) || 0), 0);
-                      return (
-                        <td key={col} className="p-2 border-r border-slate-800/60 last:border-r-0">
-                          {sum} m²
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex space-x-2 mt-3 pt-2 border-t border-slate-800">
-              <button
-                onClick={() => {
-                  const newRow: RoomMeasurements = {
-                    id: Date.now().toString(),
-                    banyo: 0, ebeveyn: 0, wc: 0, mutfak: 0, odalar: 0
-                  };
-                  updateCurrentProject(prev => ({
-                    ...prev,
-                    measurements: [...prev.measurements, newRow]
-                  }));
-                }}
-                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-2xl"
-              >
-                + Yeni Satır Ekle
-              </button>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="flex-1 py-2 bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold text-xs rounded-2xl"
-              >
-                Tamam
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* m² FİYATI NOTU */}
       {activeModal === 'm2_note' && currentProject && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[#0c1222] border border-amber-500/40 rounded-3xl p-5 shadow-2xl flex flex-col h-[55vh]">
@@ -757,6 +968,7 @@ export default function App() {
         </div>
       )}
 
+      {/* ALACAK / VERECEK NOTU */}
       {activeModal === 'alacak_note' && currentProject && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[#0c1222] border border-amber-500/40 rounded-3xl p-5 shadow-2xl flex flex-col h-[55vh]">
