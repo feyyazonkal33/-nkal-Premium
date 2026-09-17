@@ -37,6 +37,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: onkal-cari/package-lock.json
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
       - name: Install dependencies
         run: npm ci
 
