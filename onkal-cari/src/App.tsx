@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import IscilikList from './pages/IscilikList';
 import IscilikDetail from './pages/IscilikDetail';
@@ -7,7 +7,7 @@ import HesapDetail from './pages/HesapDetail';
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="max-w-md mx-auto min-h-screen relative shadow-2xl bg-dark text-gray-200">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -17,7 +17,7 @@ function App() {
           <Route path="/hesap/:id" element={<HesapDetail />} />
         </Routes>
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
