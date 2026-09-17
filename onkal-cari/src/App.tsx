@@ -141,11 +141,7 @@ export default function App() {
                 </svg>
               </button>
             ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#d4af37] to-[#8a6818] p-0.5 shadow-md flex items-center justify-center">
-                <div className="w-full h-full bg-[#0d1424] rounded-full flex items-center justify-center text-[10px] font-extrabold text-[#e5c07b]">
-                  ÖP
-                </div>
-              </div>
+              <img src="./logo.png" alt="Logo" className="w-9 h-9 rounded-full object-cover border border-amber-400/40 shadow-sm" />
             )}
             <div>
               <h1 className="text-base font-bold bg-gradient-to-r from-[#fae19c] via-[#d4af37] to-[#aa7d22] bg-clip-text text-transparent tracking-wide">
@@ -159,8 +155,8 @@ export default function App() {
 
           <div className="text-right">
             <div className="text-[11px] font-medium text-slate-300 flex items-center justify-end space-x-1">
-              <span>İzmir</span>
-              <span className="text-amber-400">☀️ 28°C</span>
+              <span>Antalya</span>
+              <span className="text-amber-400">☀️ 29°C</span>
             </div>
             <div className="text-[10px] text-slate-400">17 Eylül • 21:00</div>
           </div>
@@ -183,9 +179,9 @@ export default function App() {
                   {!logoImgError ? (
                     <img
                       src="./logo.png"
-                      alt="Önkal Logo"
+                      alt="Önkal Premium Logo"
                       onError={() => setLogoImgError(true)}
-                      className="w-24 h-24 object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
+                      className="w-32 h-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
                     />
                   ) : (
                     <div className="flex flex-col items-center justify-center">
